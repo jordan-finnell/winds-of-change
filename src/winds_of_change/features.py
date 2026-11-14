@@ -130,7 +130,7 @@ class Outlook:
 
     ``*_percentile`` is the share of historical ``hours``-hour changes (up to ``now``) that
     were smaller in size, so 0.9 means "larger than 90% of changes". NaN when unknown, e.g.
-    the forecast doesn't reach ``now + hours`` yet.
+    the series doesn't reach ``now + hours``.
     """
 
     key: str
@@ -142,8 +142,20 @@ class Outlook:
     next_percentile: float
 
 
-def outlook(hourly: pd.DataFrame, key: str, now: pd.Timestamp, hours: int = 24) -> Outlook:
-    """Change over the last and the next ``hours``, from a series reaching past ``now``."""
+def outlook(
+    hourly: pd.DataFrame,
+    key: str,
+    now: pd.Timestamp,
+    hours: int = 24,
+    *,
+    history: pd.DataFrame | None = None,
+) -> Outlook:
+    """Change over the last and the next ``hours``, from a series reaching past ``now``.
+
+    Both changes are measured within ``hourly`` (e.g. a forecast series), never across two
+    sources. Percentiles rank them against ``history`` (e.g. a long archive series) when
+    given, otherwise against ``hourly`` itself.
+    """
     s = decycle(hourly[key].dropna())
     nan = math.nan
     if s.empty:
@@ -158,17 +170,26 @@ def outlook(hourly: pd.DataFrame, key: str, now: pd.Timestamp, hours: int = 24) 
 
     last = at(now) - at(now - step)
     upcoming = at(now + step) - at(now)
-    history = window_changes(s, hours, decycled=False).loc[:now].dropna().abs()
+    use_history = history is not None and key in history
+    past = decycle(history[key].dropna()) if use_history else s
+    if past.index.tz is not None and str(past.index.tz) != str(tz):
+        past = past.tz_convert(tz)
+    history_changes = window_changes(past, hours, decycled=False).loc[:now].dropna().abs()
 
     def pct(value: float) -> float:
-        if math.isnan(value) or history.empty:
+        if math.isnan(value) or history_changes.empty:
             return nan
-        return float((history < abs(value)).mean())
+        return float((history_changes < abs(value)).mean())
 
     return Outlook(key, hours, now, last, upcoming, pct(last), pct(upcoming))
 
 
 def outlooks(
-    hourly: pd.DataFrame, keys: Sequence[str], now: pd.Timestamp, hours: int = 24
+    hourly: pd.DataFrame,
+    keys: Sequence[str],
+    now: pd.Timestamp,
+    hours: int = 24,
+    *,
+    history: pd.DataFrame | None = None,
 ) -> list[Outlook]:
-    return [outlook(hourly, k, now, hours) for k in keys if k in hourly]
+    return [outlook(hourly, k, now, hours, history=history) for k in keys if k in hourly]

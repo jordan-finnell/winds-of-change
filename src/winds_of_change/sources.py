@@ -30,6 +30,7 @@ from .factors import FACTORS, Factor
 from .location import Location
 
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
+FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 # ECMWF IFS (9 km): hourly from 2017, updated every 6 h with no delay, and the archive serves
 # it through the end of "today" (UTC), so one series covers history and the next ~day.
 OPEN_METEO_MODEL = "ecmwf_ifs"
@@ -93,19 +94,65 @@ class OpenMeteoSource:
         return parse_open_meteo(payload, self.factors)
 
     def _get(self, start: date, end: date) -> dict:
-        opener = self.opener or urllib.request.urlopen  # looked up late so tests can block it
-        try:
-            with opener(self.url(start, end), timeout=self.timeout) as response:
-                return json.load(response)
-        except urllib.error.HTTPError as exc:
-            body = _read_error_body(exc)
-            if exc.code == 400 and "out of allowed range" in body:
-                raise _OutOfRange(_max_end(body)) from None
-            raise WeatherError(f"weather service returned HTTP {exc.code}") from None
-        except (urllib.error.URLError, TimeoutError, OSError):
-            raise WeatherError("could not reach the weather service") from None
-        except ValueError:
-            raise WeatherError("weather service sent an unreadable response") from None
+        return _fetch(self.opener, self.url(start, end), self.timeout)
+
+
+@dataclass(frozen=True)
+class OpenMeteoForecastSource:
+    """Open-Meteo forecast API, same model (``ecmwf_ifs``): the last ``past_days`` and the
+    next ``forecast_days``, always reaching past "now" whatever the time zone.
+
+    Use it for outlooks only, computing each change *within* this series. It is labelled
+    as a different source from the archive, so ``combine`` refuses to splice the two: the
+    endpoints disagree by a few hPa at the same hour. 31 past days are enough for
+    ``decycle`` to remove the daily cycle from short-window changes.
+    """
+
+    location: Location
+    past_days: int = 31
+    forecast_days: int = 3
+    timeout: float = 10.0
+    factors: tuple[Factor, ...] = FACTORS
+    opener: Callable[..., Any] | None = field(default=None, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.past_days <= 92 or not 1 <= self.forecast_days <= 16:
+            raise ValueError("past_days must be 0-92 and forecast_days 1-16")
+
+    def url(self) -> str:
+        params: dict[str, object] = {
+            "latitude": self.location.latitude,
+            "longitude": self.location.longitude,
+            "past_days": self.past_days,
+            "forecast_days": self.forecast_days,
+            "hourly": ",".join(f.api_var for f in self.factors),
+            "models": OPEN_METEO_MODEL,
+            "timeformat": "unixtime",
+            "timezone": self.location.timezone or "auto",
+        }
+        if self.location.elevation is not None:
+            params["elevation"] = self.location.elevation
+        return f"{FORECAST_URL}?{urllib.parse.urlencode(params)}"
+
+    def load_recent(self) -> pd.DataFrame:
+        payload = _fetch(self.opener, self.url(), self.timeout)
+        return parse_open_meteo(payload, self.factors, source="open-meteo-forecast")
+
+
+def _fetch(opener: Callable[..., Any] | None, url: str, timeout: float) -> dict:
+    opener = opener or urllib.request.urlopen  # looked up late so tests can block it
+    try:
+        with opener(url, timeout=timeout) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as exc:
+        body = _read_error_body(exc)
+        if exc.code == 400 and "out of allowed range" in body:
+            raise _OutOfRange(_max_end(body)) from None
+        raise WeatherError(f"weather service returned HTTP {exc.code}") from None
+    except (urllib.error.URLError, TimeoutError, OSError):
+        raise WeatherError("could not reach the weather service") from None
+    except ValueError:
+        raise WeatherError("weather service sent an unreadable response") from None
 
 
 class _OutOfRange(Exception):
@@ -128,8 +175,10 @@ def _max_end(body: str) -> date | None:
         return None
 
 
-def parse_open_meteo(payload: dict, factors: Sequence[Factor] = FACTORS) -> pd.DataFrame:
-    """Turn an archive response (``timeformat=unixtime``) into the standard hourly frame."""
+def parse_open_meteo(
+    payload: dict, factors: Sequence[Factor] = FACTORS, *, source: str = "open-meteo"
+) -> pd.DataFrame:
+    """Turn an Open-Meteo response (``timeformat=unixtime``) into the standard hourly frame."""
     try:
         hourly = payload["hourly"]
         zone = payload.get("timezone") or "UTC"
@@ -147,7 +196,7 @@ def parse_open_meteo(payload: dict, factors: Sequence[Factor] = FACTORS) -> pd.D
     index = pd.DatetimeIndex(times.tz_convert(zone), name=TIME_INDEX)
     frame = pd.DataFrame({k: v.to_numpy(dtype="float64") for k, v in columns.items()}, index=index)
     frame = frame[~frame.index.duplicated(keep="last")].sort_index()
-    frame.attrs = {"source": "open-meteo", "model": OPEN_METEO_MODEL, "temperature_unit": "C"}
+    frame.attrs = {"source": source, "model": OPEN_METEO_MODEL, "temperature_unit": "C"}
     return frame
 
 

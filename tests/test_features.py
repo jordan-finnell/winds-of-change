@@ -124,3 +124,14 @@ def test_convert_temperatures_and_changes_follow():
     assert Units("F").unit_for(__import__("winds_of_change").PRESSURE) == "hPa"
     with pytest.raises(ValueError):
         Units("K")  # type: ignore[arg-type]
+
+
+def test_outlook_ranks_against_a_separate_history():
+    calm = hourly(1000 + 0.05 * np.arange(60 * 24))  # tiny changes in the long history
+    recent = hourly(1000 + 0.5 * np.arange(5 * 24), start="2025-03-02")  # big steady rise
+    now = recent.index[2 * 24]
+    own = outlook(recent, "pressure", now, hours=24)
+    ranked = outlook(recent, "pressure", now, hours=24, history=calm)
+    assert ranked.next == pytest.approx(12, abs=0.05)  # change measured within `recent`
+    assert ranked.next_percentile == pytest.approx(1.0)  # larger than every calm change
+    assert own.next_percentile < 0.5  # vs. its own (all similar) changes

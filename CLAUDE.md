@@ -20,7 +20,7 @@ Add dependencies with `uv add` / `uv add --dev`, never by editing `uv.lock`. The
 `src/winds_of_change/`:
 - `location`: `Location` rounds to 0.1° and 10 m and hides coordinates in its repr.
 - `factors`: `FACTORS`, `Units`, `convert`.
-- `sources`: `OpenMeteoSource`, `SyntheticWeatherSource`, `combine`, `WeatherError`.
+- `sources`: `OpenMeteoSource` (archive), `OpenMeteoForecastSource` (outlooks), `SyntheticWeatherSource`, `combine`, `WeatherError`.
 - `features`: `decycle`, `window_changes`, `daily_weather`, `outlook`.
 - `analysis`: `anomaly`, `change_bins`, `align_lag`, `response_by_change`, `event_profile`.
 - `cli`: `woc features`.
@@ -36,7 +36,7 @@ Hourly frame contract: tz-aware local `time` index, factor-key columns, canonica
   - Error messages and reprs never include coordinates or the request URL (`raise WeatherError(...) from None`).
   - Requests use the default urllib User-Agent, nothing tied to this project.
 - **Never copy values** from `~/project/migraine` (MigraineBuddy exports, NOAA station CSVs) or from pain_tracker's `data/` into this repo.
-- **One source, one model.** Never splice weather from different endpoints or models into one series: Open-Meteo's archive and historical-forecast APIs differed by 2.1 ± 1.9 hPa (max 6.6 hPa) for the same hours, as large as the signal. `OpenMeteoSource` pins `models=ecmwf_ifs`, and `combine` enforces the rule.
+- **One source, one model.** Never splice weather from different endpoints or models into one series: Open-Meteo's archive and historical-forecast APIs differed by 2.1 ± 1.9 hPa (max 6.6 hPa) for the same hours, as large as the signal. `OpenMeteoSource` pins `models=ecmwf_ifs`, and `combine` enforces the rule. `OpenMeteoForecastSource` (same model) exists only for outlooks: measure each change within it, rank it against archive history (`outlook(..., history=)`), and never splice it into the archive (its `source` attr differs).
 - **Changes, not levels.** Window changes are de-cycled first (diurnal cycle, pressure tide), and the daily value is the peak signed change. Keep that definition the same for every window.
 - **Honest analysis.** Keep the caveats in the docstrings: association not cause, the day before is not a placebo, and SEs are optimistic under autocorrelation.
 - Every commit passes pre-commit (gitleaks + ruff). Never use `--no-verify`. CI also runs gitleaks over the full history.

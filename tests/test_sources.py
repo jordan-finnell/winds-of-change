@@ -155,3 +155,28 @@ def test_combine_refuses_mixed_sources_or_models():
     real = parse_open_meteo(payload())
     with pytest.raises(WeatherError):
         combine(real, a)
+
+
+def test_forecast_url_and_labelled_as_a_separate_source():
+    from winds_of_change import OpenMeteoForecastSource
+
+    opener = Recorder(payload())
+    src = OpenMeteoForecastSource(LOC, opener=opener)
+    frame = src.load_recent()
+    url = urlsplit(opener.urls[0])
+    q = {k: v[0] for k, v in parse_qs(url.query).items()}
+    assert url.netloc == "api.open-meteo.com"
+    assert (q["models"], q["past_days"], q["forecast_days"]) == ("ecmwf_ifs", "31", "3")
+    assert "start_date" not in q and q["latitude"] == "51.5"
+    assert frame.attrs["source"] == "open-meteo-forecast"
+    with pytest.raises(WeatherError, match="different sources"):
+        combine(parse_open_meteo(payload()), frame)  # never splice forecast into the archive
+    with pytest.raises(ValueError):
+        OpenMeteoForecastSource(LOC, past_days=100)
+
+
+def test_forecast_failures_are_weather_errors():
+    from winds_of_change import OpenMeteoForecastSource
+
+    with pytest.raises(WeatherError, match="could not reach"):
+        OpenMeteoForecastSource(LOC, opener=Recorder(urllib.error.URLError("x"))).load_recent()

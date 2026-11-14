@@ -3,11 +3,18 @@
 Typical use::
 
     from datetime import date
-    from winds_of_change import Location, OpenMeteoSource, Units, convert, daily_weather
+    import pandas as pd
+    import winds_of_change as woc
 
-    source = OpenMeteoSource(Location(latitude=51.5, longitude=0.0))
-    hourly = convert(source.load_hourly(date(2025, 1, 1), date(2025, 6, 30)), Units("F"))
-    daily = daily_weather(hourly)          # pressure_change_24h, dew_point_change_6h, ...
+    place = woc.Location(latitude=51.5, longitude=0.0)
+    units = woc.Units("F")
+    archive = woc.OpenMeteoSource(place)
+    history = woc.convert(archive.load_hourly(date(2025, 1, 1), date.today()), units)
+    daily = woc.daily_weather(history)  # pressure_change_24h, dew_point_change_6h, ...
+
+    recent = woc.convert(woc.OpenMeteoForecastSource(place).load_recent(), units)
+    now = pd.Timestamp.now(tz=recent.index.tz)
+    look = woc.outlook(recent, "pressure", now, 24, history=history)
 """
 
 from importlib.metadata import PackageNotFoundError, version
@@ -37,6 +44,7 @@ from .features import (
 from .location import Location, LocationError
 from .sources import (
     OPEN_METEO_MODEL,
+    OpenMeteoForecastSource,
     OpenMeteoSource,
     SyntheticWeatherSource,
     WeatherError,
@@ -62,6 +70,7 @@ __all__ = [
     "Factor",
     "Location",
     "LocationError",
+    "OpenMeteoForecastSource",
     "OpenMeteoSource",
     "Outlook",
     "SyntheticWeatherSource",

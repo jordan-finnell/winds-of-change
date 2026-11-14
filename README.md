@@ -45,6 +45,13 @@ woc.response_by_change(anoms, change, bins, lag=1)  # next-day effect per metric
 woc.event_profile(anoms["headache"], change, bins, "drop")  # 2 days before .. 3 after
 ```
 
+For an outlook, use the forecast series (same model, through the next ~2 days), measuring the change within it and ranking it against the archive:
+
+```python
+recent = woc.OpenMeteoForecastSource(woc.Location(latitude=51.5, longitude=0.0)).load_recent()
+look = woc.outlook(recent, "pressure", now, hours=24, history=hourly)  # .next, .next_percentile
+```
+
 From the shell, `woc features --lat 51.5 --lon 0.0 --start 2025-01-01 --end 2025-06-30 -o weather.csv` writes the daily features to a CSV. Use `--synthetic SEED` in place of the coordinates to work offline.
 
 ## What the features mean
@@ -67,6 +74,7 @@ From the shell, `woc features --lat 51.5 --lon 0.0 --start 2025-01-01 --end 2025
 
 ## Data source and privacy
 - **Source:** the [Open-Meteo](https://open-meteo.com/) historical archive, pinned to the ECMWF IFS model. It is hourly from 2017 through the end of today (UTC), updated every 6 hours.
+- **Outlooks** come from the Open-Meteo forecast API with the same model. The archive's last allowed date is "today" in UTC, so it doesn't always reach 24 hours ahead.
 - **One model only.** Different models and endpoints disagree by a few hPa at the same hour, as large as the changes being measured, so `combine` refuses to splice different sources or models.
 - **What leaves the machine:** coordinates rounded to 0.1° (about 11 km, comparable to the 9 km model grid), an optional elevation rounded to 10 m, a date range and variable names, with the default urllib User-Agent.
 - **What it never does:**
