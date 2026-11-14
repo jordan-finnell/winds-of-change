@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.2.1
+- Published to [PyPI](https://pypi.org/project/winds-of-change/): `uv add winds-of-change`. No code changes.
+
 ## v0.2.0
 - **`OpenMeteoForecastSource`:** the forecast API with the same model (last 31 days plus the next 3). The archive's last allowed date is "today" in UTC, so in many time zones it doesn't reach 24 h past now. Outlooks now come from this series. It is labelled as a separate source, so `combine` refuses to splice it into archive history.
 - **`outlook(..., history=)`:** measures changes within one series and ranks them against a longer history.

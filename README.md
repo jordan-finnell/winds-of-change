@@ -7,18 +7,11 @@ It exists because people with migraines (and other weather-sensitive conditions)
 The core depends only on pandas and numpy. The [health-log-dashboard](https://github.com/jordan-finnell/health-log-dashboard) uses it for its Weather page.
 
 ## Install
-Each release attaches a wheel. Pin it with uv:
+From [PyPI](https://pypi.org/project/winds-of-change/):
 
-```toml
-# pyproject.toml
-[tool.uv.sources]
-winds-of-change = { url = "https://github.com/jordan-finnell/winds-of-change/releases/download/v0.1.0/winds_of_change-0.1.0-py3-none-any.whl" }
-```
 ```bash
-uv add winds-of-change
+uv add winds-of-change      # or: pip install winds-of-change
 ```
-
-Or with pip: `pip install <wheel URL>`.
 
 ## Quick start
 Synthetic weather works offline and needs no location:
@@ -94,7 +87,7 @@ uv run ruff check . && uv run ruff format .
 uv run pre-commit run --all-files # ruff, gitleaks, hygiene hooks
 uv build
 ```
-To release, bump `version` in `pyproject.toml`, update `CHANGELOG.md`, then tag `vX.Y.Z` and push the tag. CI builds the wheel and attaches it to a GitHub Release.
+To release, bump `version` in `pyproject.toml`, update `CHANGELOG.md`, then tag `vX.Y.Z` and push the tag. CI publishes the wheel and sdist to PyPI and attaches them to a GitHub Release.
 
 ## License
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/jordan-finnell/winds-of-change/blob/trunk/LICENSE).

@@ -1,6 +1,6 @@
 [project]
 name = "winds-of-change"
-version = "0.2.0"
+version = "0.2.1"
 description = "Weather-change features (pressure, humidity, temperature) for relating weather to personal health logs."
 readme = "README.md"
 license = "MIT"
@@ -10,6 +10,11 @@ dependencies = [
     "numpy>=2.5",
     "pandas>=3.1.1",
 ]
+
+[project.urls]
+Repository = "https://github.com/jordan-finnell/winds-of-change"
+Changelog = "https://github.com/jordan-finnell/winds-of-change/blob/trunk/CHANGELOG.md"
+Issues = "https://github.com/jordan-finnell/winds-of-change/issues"
 
 [project.scripts]
 woc = "winds_of_change.cli:main"

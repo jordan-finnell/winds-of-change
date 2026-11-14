@@ -3,7 +3,7 @@
 A small Python library that turns hourly weather into daily **change** features (pressure, dew point, temperature over 3–48 h windows) and relates them to daily health-log outcomes. It is a **public GitHub repo** (portfolio piece), so it must never contain anyone's location, health data or credentials.
 
 Consumers:
-- `~/project/pain_tracker` (the health-log-dashboard) pins a release wheel URL in its `[tool.uv.sources]` and builds its Weather page on this library.
+- `~/project/pain_tracker` (the health-log-dashboard) depends on it from PyPI and builds its Weather page on this library.
 - `~/project/migraine` notebooks may use it, or the `woc` CLI's CSV export.
 
 ## Commands
@@ -45,5 +45,5 @@ Hourly frame contract: tz-aware local `time` index, factor-key columns, canonica
 - Default branch is **`trunk`**.
 - Commits use the user's global git identity. Keep messages short and imperative; explain why in the body.
 - Python 3.13, type hints on public functions, ruff (line length 100).
-- Releases: bump `version`, update `CHANGELOG.md`, tag `vX.Y.Z`. `release.yml` checks the tag matches, builds, and attaches the wheel and sdist to a GitHub Release. Consumers then bump the URL in their `[tool.uv.sources]`.
+- Releases: bump `version`, update `CHANGELOG.md`, tag `vX.Y.Z`. `release.yml` checks the tag matches, builds, publishes to PyPI (trusted publishing from the `pypi` environment, which only `v*` tags can deploy to; no token) and attaches the wheel and sdist to a GitHub Release. Consumers then run `uv lock --upgrade-package winds-of-change`. A PyPI version can never be re-uploaded, only yanked: a mistake means a new version number.
 - GitHub: two accounts are logged into `gh`. Confirm `jordan-finnell` is active (`gh auth status`) before pushing or releasing.
