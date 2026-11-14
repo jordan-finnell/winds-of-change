@@ -1,0 +1,34 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# --- Private data: NEVER commit ---
+# Weather for a real place reveals where someone is; health logs are health data.
+data/
+*.csv
+*.parquet
+*.sqlite
+*.db
+secrets.toml
+.env
+.env.*
+*.pem
+*.key
+
+# Per-user Claude Code settings
+.claude/settings.local.json
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+.DS_Store
