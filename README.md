@@ -29,7 +29,7 @@ import winds_of_change as woc
 
 hourly = woc.SyntheticWeatherSource(seed=1).load_hourly(date(2025, 1, 1), date(2025, 6, 30))
 hourly = woc.convert(hourly, woc.Units(temperature="F"))
-daily = woc.daily_weather(hourly)            # pressure_change_24h, dew_point_change_6h, ...
+daily = woc.daily_weather(hourly)  # pressure_change_24h, dew_point_change_6h, ...
 
 # Real weather (Open-Meteo, no API key). Coordinates are rounded to 0.1 degrees first.
 source = woc.OpenMeteoSource(woc.Location(latitude=51.5, longitude=0.0))
@@ -38,10 +38,10 @@ source = woc.OpenMeteoSource(woc.Location(latitude=51.5, longitude=0.0))
 Relate the changes to a daily outcome frame (one row per day, one column per metric):
 
 ```python
-anoms = woc.anomaly(outcomes)                      # vs. your own usual level that month
+anoms = woc.anomaly(outcomes)  # vs. your own usual level that month
 change = daily["pressure_change_24h"]
-bins = woc.change_bins(change)                     # steepest 20% of drops / rises
-woc.response_by_change(anoms, change, bins, lag=1) # next-day effect per metric
+bins = woc.change_bins(change)  # steepest 20% of drops / rises
+woc.response_by_change(anoms, change, bins, lag=1)  # next-day effect per metric
 woc.event_profile(anoms["headache"], change, bins, "drop")  # 2 days before .. 3 after
 ```
 
