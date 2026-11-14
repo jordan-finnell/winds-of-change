@@ -3,12 +3,21 @@ repos:
     rev: v8.24.2
     hooks:
       - id: gitleaks
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.11.10
+  # Ruff runs from uv.lock, the same version and commands as CI, so the two can't drift.
+  - repo: local
     hooks:
-      - id: ruff
-        args: [--fix]
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --frozen ruff check --fix .
+        language: system
+        pass_filenames: false
+        always_run: true
       - id: ruff-format
+        name: ruff format
+        entry: uv run --frozen ruff format .
+        language: system
+        pass_filenames: false
+        always_run: true
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
