@@ -79,6 +79,14 @@ From the shell, `woc features --lat 51.5 --lon 0.0 --start 2025-01-01 --end 2025
 - **Terms:** Open-Meteo's free API is for non-commercial use.
 - **Attribution:** weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0), from ECMWF IFS forecasts and analyses.
 
+## Documentation
+[`docs/open-meteo/`](https://github.com/jordan-finnell/winds-of-change/tree/trunk/docs/open-meteo) is a reference to Open-Meteo, written for working on or extending this library:
+
+- [Open-Meteo, the service](https://github.com/jordan-finnell/winds-of-change/blob/trunk/docs/open-meteo/open-meteo.md): its APIs, terms, rate limits and call costs, licence and attribution.
+- [API reference](https://github.com/jordan-finnell/winds-of-change/blob/trunk/docs/open-meteo/api-reference.md): parameters, responses, time zones, elevation and grid cells, errors and variables.
+- [Models and datasets](https://github.com/jordan-finnell/winds-of-change/blob/trunk/docs/open-meteo/models.md): forecast models, reanalyses and ensembles, with `models=` IDs and coverage.
+- [How this library uses Open-Meteo](https://github.com/jordan-finnell/winds-of-change/blob/trunk/docs/open-meteo/in-this-library.md): the requests it sends and why, measured differences between endpoints and models, and pitfalls.
+
 ## Development
 ```bash
 uv sync

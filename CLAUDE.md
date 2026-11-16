@@ -27,6 +27,8 @@ Add dependencies with `uv add` / `uv add --dev`, never by editing `uv.lock`. The
 
 Public API is re-exported in `__init__`.
 
+`docs/open-meteo/` is the Open-Meteo reference: `open-meteo.md` (APIs, terms, limits, call costs, licence), `api-reference.md` (parameters, responses, time, elevation, errors, variables, endpoints), `models.md` (model and dataset IDs, coverage, delays) and `in-this-library.md` (what the sources send and why, measured endpoint and model differences, pitfalls). Read it before changing a source or adding a model or variable.
+
 Hourly frame contract: tz-aware local `time` index, factor-key columns, canonical hPa/°C, `attrs` with `source`, `model` and `temperature_unit`. Daily frames have a naive `date` index covering every day.
 
 ## Rules
@@ -36,9 +38,10 @@ Hourly frame contract: tz-aware local `time` index, factor-key columns, canonica
   - Error messages and reprs never include coordinates or the request URL (`raise WeatherError(...) from None`).
   - Requests use the default urllib User-Agent, nothing tied to this project.
 - **Never copy values** from `~/project/migraine` (MigraineBuddy exports, NOAA station CSVs) or from pain_tracker's `data/` into this repo.
-- **One source, one model.** Never splice weather from different endpoints or models into one series: Open-Meteo's archive and historical-forecast APIs differed by 2.1 ± 1.9 hPa (max 6.6 hPa) for the same hours, as large as the signal. `OpenMeteoSource` pins `models=ecmwf_ifs`, and `combine` enforces the rule. `OpenMeteoForecastSource` (same model) exists only for outlooks: measure each change within it, rank it against archive history (`outlook(..., history=)`), and never splice it into the archive (its `source` attr differs).
+- **One source, one model.** Never splice weather from different endpoints or models into one series. An early check found Open-Meteo's archive and historical-forecast APIs 2.1 ± 1.9 hPa apart (max 6.6 hPa) for the same hours, as large as the signal. At Greenwich with both pinned to `ecmwf_ifs` they match exactly, but different models differ by up to 3 hPa in 24 h changes (`docs/open-meteo/in-this-library.md`). `OpenMeteoSource` pins `models=ecmwf_ifs`, and `combine` enforces the rule. `OpenMeteoForecastSource` (same model) exists only for outlooks: measure each change within it, rank it against archive history (`outlook(..., history=)`), and never splice it into the archive (its `source` attr differs).
 - **Changes, not levels.** Window changes are de-cycled first (diurnal cycle, pressure tide), and the daily value is the peak signed change. Keep that definition the same for every window.
 - **Honest analysis.** Keep the caveats in the docstrings: association not cause, the day before is not a placebo, and SEs are optimistic under autocorrelation.
+- **Keep `docs/open-meteo/` current.** When a source, request parameter, model or Open-Meteo behaviour changes, update the matching page. Mark statements checked against the live API as *observed*, with the date. Check them only with neutral places (Greenwich) and small requests: the null count, the `reason` and the `X-RateLimit-Cost` header are usually enough. A known model ID with no data returns 200 and all-`null` values, not an error.
 - Every commit passes pre-commit (gitleaks + ruff). Never use `--no-verify`. CI also runs gitleaks over the full history.
 
 ## Conventions
