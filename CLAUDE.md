@@ -22,7 +22,7 @@ Add dependencies with `uv add` / `uv add --dev`, never by editing `uv.lock`. The
 - `factors`: `FACTORS`, `Units`, `convert`.
 - `sources`: `OpenMeteoSource` (archive), `OpenMeteoForecastSource` (outlooks), `SyntheticWeatherSource`, `combine`, `WeatherError`.
 - `features`: `decycle`, `window_changes`, `daily_weather`, `outlook`.
-- `analysis`: `anomaly`, `change_bins`, `align_lag`, `response_by_change`, `event_profile`.
+- `analysis`: `anomaly`, `change_bins`, `align_lag`, `response_by_change`, `event_profile`, and the dose-response pair `change_bands` / `response_by_band` (spell-clustered intervals).
 - `cli`: `woc features`.
 
 Public API is re-exported in `__init__`.

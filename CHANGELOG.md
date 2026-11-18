@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.3.0
+- **Dose-response:** `change_bands` splits daily changes into five bands from the steepest drops to the steepest rises (by default the steepest 10% each way, the next 15%, and the middle half; the outer bands are the same days as `change_bins(q=big)`). `response_by_band` gives each metric's mean anomaly per band with a 95% interval. Intervals are clustered by spell (days of one band within 2 days of each other), because weather comes in runs.
+
 ## v0.2.1
 - Published to [PyPI](https://pypi.org/project/winds-of-change/): `uv add winds-of-change`. No code changes.
 

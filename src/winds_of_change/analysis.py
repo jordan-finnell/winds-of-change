@@ -10,6 +10,8 @@ missing days), one column per metric. These are associations, not proof of cause
   control. Treat days before an event as context, not a placebo.
 - Simple standard errors ignore autocorrelation, so they are somewhat optimistic; and with
   many metrics, factors, windows and lags, some cells will look clear by chance.
+  ``response_by_band`` treats each spell of nearby same-band days as one unit, which
+  narrows that gap but doesn't close it (ratings also carry over between spells).
 """
 
 from __future__ import annotations
@@ -23,6 +25,8 @@ import pandas as pd
 
 BIG_DROP, TYPICAL, BIG_RISE = "Big drop", "Typical", "Big rise"
 BIN_LABELS: tuple[str, str, str] = (BIG_DROP, TYPICAL, BIG_RISE)
+DROP, STEADY, RISE = "Drop", "Steady", "Rise"
+BAND_LABELS: tuple[str, str, str, str, str] = (BIG_DROP, DROP, STEADY, RISE, BIG_RISE)
 Kind = Literal["drop", "rise"]
 
 
@@ -158,3 +162,136 @@ def event_profile(
     )
     out.attrs["events"] = len(events)
     return out
+
+
+# ------------------------------------------------------------------------- dose-response
+
+
+@dataclass(frozen=True)
+class ChangeBands:
+    """Five bands from the steepest drops to the steepest rises: the steepest ``big`` share
+    each way ("Big drop"/"Big rise", the same days as ``change_bins(q=big)``), the next
+    ``moderate - big`` each way ("Drop"/"Rise"), and the middle ("Steady")."""
+
+    big_drop_below: float
+    drop_below: float
+    rise_above: float
+    big_rise_above: float
+    big: float
+    moderate: float
+    n: int
+
+    @property
+    def ready(self) -> bool:
+        return not math.isnan(self.big_drop_below)
+
+    def assign(self, change: pd.Series) -> pd.Series:
+        labels = pd.Series(pd.NA, index=change.index, dtype="object")
+        if self.ready:
+            valid = change.notna()
+            labels[valid] = STEADY
+            labels[valid & (change <= self.drop_below)] = DROP
+            labels[valid & (change >= self.rise_above)] = RISE
+            labels[valid & (change <= self.big_drop_below)] = BIG_DROP
+            labels[valid & (change >= self.big_rise_above)] = BIG_RISE
+        return pd.Series(pd.Categorical(labels, categories=BAND_LABELS), index=change.index)
+
+
+def change_bands(
+    change: pd.Series, big: float = 0.1, moderate: float = 0.25, min_n: int = 20
+) -> ChangeBands:
+    """Thresholds for ``ChangeBands`` from quantiles of ``change`` (signed, so drops and rises
+    are each the steepest share of all days). Compute over the whole span you have. NaN
+    thresholds when fewer than ``min_n`` changes are available."""
+    if not 0 < big < moderate < 0.5:
+        raise ValueError("need 0 < big < moderate < 0.5")
+    valid = change.dropna()
+    if len(valid) < min_n:
+        nan = math.nan
+        return ChangeBands(nan, nan, nan, nan, big, moderate, len(valid))
+    q = valid.quantile([big, moderate, 1 - moderate, 1 - big]).to_numpy(dtype=float)
+    return ChangeBands(*map(float, q), big=big, moderate=moderate, n=len(valid))
+
+
+# Two-sided 95% Student-t critical values for df 1-30.
+_T975 = (
+    12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228,
+    2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086,
+    2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042,
+)  # fmt: skip
+
+
+def _t975(df: int) -> float:
+    """Two-sided 95% Student-t critical value: a table to df 30, then a Cornish-Fisher
+    expansion (within 0.001 beyond that), so the core needs no SciPy."""
+    if df < 1:
+        return math.nan
+    if df <= len(_T975):
+        return _T975[df - 1]
+    z = 1.959963984540054
+    v = float(df)
+    return (
+        z
+        + (z**3 + z) / (4 * v)
+        + (5 * z**5 + 16 * z**3 + 3 * z) / (96 * v**2)
+        + (3 * z**7 + 19 * z**5 + 17 * z**3 - 15 * z) / (384 * v**3)
+    )
+
+
+def _spells(dates: pd.DatetimeIndex, gap: int) -> np.ndarray:
+    """Spell id per (sorted) date: a new spell starts after more than ``gap`` days apart."""
+    if len(dates) == 0:
+        return np.array([], dtype=int)
+    days = dates.to_numpy(dtype="datetime64[D]").astype("int64")
+    return np.concatenate([[0], np.cumsum(np.diff(days) > gap)])
+
+
+def response_by_band(
+    anomalies: pd.DataFrame,
+    change: pd.Series,
+    bands: ChangeBands,
+    lag: int = 0,
+    min_n: int = 10,
+    min_spells: int = 5,
+    spell_gap: int = 2,
+) -> pd.DataFrame:
+    """Mean anomaly of every metric in each change band: a dose-response view.
+
+    Long format, one row per (metric, band) in column then band order: ``metric``, ``band``,
+    ``change`` (median change on that band's days), ``mean``, ``se``, ``ci_low``,
+    ``ci_high`` (95%), ``n`` (days) and ``spells``.
+
+    Days of the same band within ``spell_gap`` days of each other form a spell, and the
+    standard error is clustered by spell, because weather comes in multi-day runs and a
+    run of bad days is closer to one observation than several. The interval uses a t value
+    with ``spells - 1`` degrees of freedom. ``mean`` and the rest are NaN below ``min_n``
+    days or ``min_spells`` spells.
+    """
+    aligned = align_lag(change, lag, anomalies.index)
+    groups = bands.assign(aligned)
+    days_in = {b: (groups == b).fillna(False).to_numpy() for b in BAND_LABELS}
+    rows = []
+    for metric in anomalies.columns:
+        values = anomalies[metric]
+        for band in BAND_LABELS:
+            mask = days_in[band] & values.notna().to_numpy()
+            v = values[mask].sort_index()
+            n = len(v)
+            spell = _spells(pd.DatetimeIndex(v.index), spell_gap)
+            g = int(spell.max()) + 1 if n else 0
+            mid = float(aligned[mask].median()) if n else math.nan
+            if n >= max(min_n, 2) and g >= max(min_spells, 2):
+                x = v.to_numpy(dtype=float)
+                mean = float(x.mean())
+                sums = np.bincount(spell, weights=x - mean)
+                se = math.sqrt(g / (g - 1) * float((sums**2).sum())) / n
+                half = _t975(g - 1) * se
+                lo, hi = mean - half, mean + half
+            else:
+                mean = se = lo = hi = math.nan
+            rows.append(
+                {"metric": metric, "band": band, "change": mid, "mean": mean, "se": se,
+                 "ci_low": lo, "ci_high": hi, "n": n, "spells": g}
+            )  # fmt: skip
+    cols = ["metric", "band", "change", "mean", "se", "ci_low", "ci_high", "n", "spells"]
+    return pd.DataFrame(rows, columns=cols)

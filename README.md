@@ -36,6 +36,10 @@ change = daily["pressure_change_24h"]
 bins = woc.change_bins(change)  # steepest 20% of drops / rises
 woc.response_by_change(anoms, change, bins, lag=1)  # next-day effect per metric
 woc.event_profile(anoms["headache"], change, bins, "drop")  # 2 days before .. 3 after
+
+# Dose-response: five bands from the steepest drops to the steepest rises.
+bands = woc.change_bands(change, big=0.1, moderate=0.25)
+woc.response_by_band(anoms, change, bands, lag=1)  # mean, 95% CI, days and spells per band
 ```
 
 For an outlook, use the forecast series (same model, through the next ~2 days), measuring the change within it and ranking it against the archive:
@@ -62,8 +66,9 @@ From the shell, `woc features --lat 51.5 --lon 0.0 --start 2025-01-01 --end 2025
 ## Doing the comparison honestly
 - **Personal baseline.** `anomaly` compares each day with the mean of the *other* days in the surrounding 29 days. Seasons, treatment changes and life events then don't masquerade as weather effects. This matters because weather variability is itself seasonal.
 - **Thresholds:** `change_bins` uses the steepest 20% of drops and of rises over the whole span, so they adapt to the local climate.
+- **Dose-response.** `change_bands` splits days into five bands (by default the steepest 10% each way, the next 15% and the middle half), and `response_by_band` gives the mean anomaly per band. A steady slope across the bands says more than a single big-vs-typical gap. Its intervals count days of the same band within 2 days of each other as one spell (clustered standard errors, *t* with spells − 1 degrees of freedom), because weather comes in runs.
 - **Lags** shift by calendar days (`lag=1` means symptoms on day D vs. the change on D−1), so gaps in a log can't misalign them.
-- **These are associations, not proof.** Day-to-day changes overlap in time, so the day *before* an event is context, not a clean control. Standard errors ignore autocorrelation. With many metrics × factors × windows × lags, some cells will look clear by chance.
+- **These are associations, not proof.** Day-to-day changes overlap in time, so the day *before* an event is context, not a clean control. Standard errors ignore autocorrelation, except that `response_by_band` clusters by spell, which narrows the gap without closing it. With many metrics × factors × windows × lags, some cells will look clear by chance.
 
 ## Data source and privacy
 - **Source:** the [Open-Meteo](https://open-meteo.com/) historical archive, pinned to the ECMWF IFS model. It is hourly from 2017 through the end of today (UTC), updated every 6 hours.

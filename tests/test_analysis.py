@@ -6,16 +6,20 @@ import pandas as pd
 import pytest
 
 from winds_of_change import (
+    BAND_LABELS,
     BIN_LABELS,
     SyntheticWeatherSource,
     align_lag,
     anomaly,
+    change_bands,
     change_bins,
     daily_weather,
     event_days,
     event_profile,
+    response_by_band,
     response_by_change,
 )
+from winds_of_change.analysis import _spells, _t975
 
 
 def days(n, start="2025-01-01"):
@@ -121,3 +125,81 @@ def test_end_to_end_on_synthetic_weather():
     by_bin = resp.set_index("bin")["mean"]
     assert by_bin["Big drop"] > by_bin["Typical"] > by_bin["Big rise"] - 0.3
     assert by_bin["Big drop"] > 0.5
+
+
+def test_bands_split_signed_quantiles_and_match_the_bins():
+    change = pd.Series(np.arange(-50.0, 50.0), index=days(100))
+    bands = change_bands(change, big=0.1, moderate=0.25)
+    labels = bands.assign(change)
+    assert list(labels.cat.categories) == list(BAND_LABELS)
+    counts = labels.value_counts()
+    assert (counts["Big drop"], counts["Drop"], counts["Steady"]) == (10, 15, 50)
+    assert (counts["Rise"], counts["Big rise"]) == (15, 10)
+    bins = change_bins(change, q=0.1)  # the outer bands are the same days as the bins
+    assert ((labels == "Big drop") == (bins.assign(change) == "Big drop")).all()
+    assert ((labels == "Big rise") == (bins.assign(change) == "Big rise")).all()
+    few = change_bands(change.iloc[:5])
+    assert not few.ready and few.assign(change).isna().all()
+    with pytest.raises(ValueError):
+        change_bands(change, big=0.3, moderate=0.25)
+
+
+def _dose(n=400, seed=1, effect=-0.4):
+    """Next-day outcome falls in proportion to the size of a drop; rises do nothing."""
+    rng = np.random.default_rng(seed)
+    idx = days(n)
+    change = pd.Series(rng.normal(0, 3, n), index=idx)
+    outcome = pd.Series(rng.normal(5, 0.5, n), index=idx)
+    drop_size = -change.clip(upper=0).shift(1, fill_value=0.0)  # >= 0, yesterday's drop
+    return change, outcome + effect * drop_size  # lower the day after a bigger drop
+
+
+def test_response_by_band_shows_a_dose_response():
+    change, outcome = _dose()
+    anoms = anomaly(outcome.to_frame("energy"))
+    resp = response_by_band(anoms, change, change_bands(change), lag=1).set_index("band")
+    assert list(resp.index) == list(BAND_LABELS)
+    assert list(resp.columns) == [
+        "metric", "change", "mean", "se", "ci_low", "ci_high", "n", "spells"
+    ]  # fmt: skip
+    means = resp["mean"]
+    assert means["Big drop"] < means["Drop"] < means["Steady"]  # graded, not just big/small
+    assert abs(means["Big rise"] - means["Rise"]) < 0.5  # rises do nothing
+    assert resp.loc["Big drop", "ci_high"] < 0 < resp.loc["Steady", "ci_high"]
+    assert resp["change"].is_monotonic_increasing  # median change runs drop -> rise
+    assert resp.loc["Big drop", "n"] == pytest.approx(40, abs=2)
+
+
+def test_spells_cluster_nearby_days_and_widen_the_interval():
+    idx = days(200)
+    # Five 4-day runs of big drops; inside a run the outcome moves together.
+    change = pd.Series(0.0, index=idx)
+    outcome = pd.Series(np.random.default_rng(3).normal(0, 0.3, 200), index=idx)
+    shared = [1.5, -0.5, 1.0, 2.0, 0.0]
+    for k, start in enumerate(range(20, 200, 36)):
+        change.iloc[start : start + 4] = -10.0
+        outcome.iloc[start : start + 4] += shared[k]
+    change.iloc[::7] += 5.0  # rises elsewhere so the quantiles split
+    bands = change_bands(change, big=0.1, moderate=0.2)
+    resp = response_by_band(outcome.to_frame("x"), change, bands, min_n=10, min_spells=5)
+    big = resp.set_index("band").loc["Big drop"]
+    assert big["n"] == 20 and big["spells"] == 5
+    naive_se = outcome[change <= bands.big_drop_below].std(ddof=1) / math.sqrt(20)
+    assert big["se"] > 1.5 * naive_se  # four days of one spell aren't four observations
+    assert big["ci_high"] - big["mean"] == pytest.approx(_t975(4) * big["se"])
+
+
+def test_spells_and_t_values():
+    d = pd.DatetimeIndex(["2025-01-01", "2025-01-02", "2025-01-04", "2025-01-08"])
+    assert list(_spells(d, gap=2)) == [0, 0, 0, 1]
+    assert list(_spells(d, gap=1)) == [0, 0, 1, 2]
+    assert len(_spells(d[:0], gap=2)) == 0
+    for df, exact in ((3, 3.182), (4, 2.776), (30, 2.042), (31, 2.040), (60, 2.000)):
+        assert _t975(df) == pytest.approx(exact, abs=0.001)
+
+
+def test_response_by_band_blanks_thin_bands():
+    change, outcome = _dose(n=60)
+    resp = response_by_band(anomaly(outcome.to_frame("x")), change, change_bands(change))
+    thin = resp[(resp["n"] < 10) | (resp["spells"] < 5)]
+    assert not thin.empty and thin[["mean", "se", "ci_low", "ci_high"]].isna().all().all()

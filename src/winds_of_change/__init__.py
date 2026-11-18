@@ -21,13 +21,17 @@ from importlib.metadata import PackageNotFoundError, version
 
 from . import analysis
 from .analysis import (
+    BAND_LABELS,
     BIN_LABELS,
+    ChangeBands,
     ChangeBins,
     align_lag,
     anomaly,
+    change_bands,
     change_bins,
     event_days,
     event_profile,
+    response_by_band,
     response_by_change,
 )
 from .factors import DEW_POINT, FACTORS, PRESSURE, TEMPERATURE, Factor, Units, convert, factor
@@ -59,6 +63,7 @@ except PackageNotFoundError:  # running from a source checkout without installin
     __version__ = "0.0.0"
 
 __all__ = [
+    "BAND_LABELS",
     "BIN_LABELS",
     "DEFAULT_WINDOWS",
     "DEW_POINT",
@@ -66,6 +71,7 @@ __all__ = [
     "OPEN_METEO_MODEL",
     "PRESSURE",
     "TEMPERATURE",
+    "ChangeBands",
     "ChangeBins",
     "Factor",
     "Location",
@@ -81,6 +87,7 @@ __all__ = [
     "align_lag",
     "analysis",
     "anomaly",
+    "change_bands",
     "change_bins",
     "change_column",
     "combine",
@@ -93,6 +100,7 @@ __all__ = [
     "outlook",
     "outlooks",
     "parse_open_meteo",
+    "response_by_band",
     "response_by_change",
     "window_changes",
 ]
